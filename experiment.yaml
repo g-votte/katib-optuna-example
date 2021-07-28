@@ -1,0 +1,60 @@
+apiVersion: "kubeflow.org/v1beta1"
+kind: Experiment
+metadata:
+  namespace: kubeflow
+  name: example-multivariate-tpe
+spec:
+  objective:
+    type: minimize
+    goal: 0.0001
+    objectiveMetricName: evaluation
+  algorithm:
+    algorithmName: multivariate-tpe
+  metricsCollectorSpec:
+    source:
+      filter:
+        metricsFormat:
+          - "{metricName: ([\\w|-]+), metricValue: ((-?\\d+)(\\.\\d+)?)}"
+      fileSystemPath:
+        path: "/var/log/katib.log"
+        kind: File
+    collector:
+      kind: File
+  parallelTrialCount: 2
+  maxTrialCount: 50
+  maxFailedTrialCount: 3
+  parameters:
+    - name: x1
+      parameterType: double
+      feasibleSpace:
+        min: "-10"
+        max: "10"
+    - name: x2
+      parameterType: double
+      feasibleSpace:
+        min: "-10"
+        max: "10"
+  trialTemplate:
+    primaryContainerName: training-container
+    trialParameters:
+      - name: X1
+        description: description of x1
+        reference: x1
+      - name: X2
+        description: description of x2
+        reference: x2
+    trialSpec:
+      apiVersion: batch/v1
+      kind: Job
+      spec:
+        template:
+          spec:
+            containers:
+              - name: training-container
+                image: docker.io/cbata/hello-katib-quadratic-function
+                command:
+                  - "python3"
+                  - "main.py"
+                  - "--x1=${trialParameters.X1}"
+                  - "--x2=${trialParameters.X2}"
+            restartPolicy: Never
