@@ -2,47 +2,49 @@ apiVersion: "kubeflow.org/v1beta1"
 kind: Experiment
 metadata:
   namespace: kubeflow
-  name: example-multivariate-tpe
+  name: multivariate-tpe-example
 spec:
   objective:
-    type: minimize
-    goal: 0.0001
-    objectiveMetricName: evaluation
+    type: maximize
+    goal: 0.99
+    objectiveMetricName: Validation-accuracy
+    additionalMetricNames:
+      - Train-accuracy
   algorithm:
     algorithmName: multivariate-tpe
-  metricsCollectorSpec:
-    source:
-      filter:
-        metricsFormat:
-          - "{metricName: ([\\w|-]+), metricValue: ((-?\\d+)(\\.\\d+)?)}"
-      fileSystemPath:
-        path: "/var/log/katib.log"
-        kind: File
-    collector:
-      kind: File
-  parallelTrialCount: 2
-  maxTrialCount: 50
+  parallelTrialCount: 3
+  maxTrialCount: 12
   maxFailedTrialCount: 3
   parameters:
-    - name: x1
+    - name: lr
       parameterType: double
       feasibleSpace:
-        min: "-10"
-        max: "10"
-    - name: x2
-      parameterType: double
+        min: "0.01"
+        max: "0.03"
+    - name: num-layers
+      parameterType: int
       feasibleSpace:
-        min: "-10"
-        max: "10"
+        min: "2"
+        max: "5"
+    - name: optimizer
+      parameterType: categorical
+      feasibleSpace:
+        list:
+          - sgd
+          - adam
+          - ftrl
   trialTemplate:
     primaryContainerName: training-container
     trialParameters:
-      - name: X1
-        description: description of x1
-        reference: x1
-      - name: X2
-        description: description of x2
-        reference: x2
+      - name: learningRate
+        description: Learning rate for the training model
+        reference: lr
+      - name: numberLayers
+        description: Number of training model layers
+        reference: num-layers
+      - name: optimizer
+        description: Training model optimizer (sdg, adam or ftrl)
+        reference: optimizer
     trialSpec:
       apiVersion: batch/v1
       kind: Job
@@ -51,10 +53,13 @@ spec:
           spec:
             containers:
               - name: training-container
-                image: docker.io/cbata/hello-katib-quadratic-function
+                image: docker.io/kubeflowkatib/mxnet-mnist:v1beta1-45c5727
                 command:
                   - "python3"
-                  - "main.py"
-                  - "--x1=${trialParameters.X1}"
-                  - "--x2=${trialParameters.X2}"
+                  - "/opt/mxnet-mnist/mnist.py"
+                  - "--batch-size=64"
+                  - "--lr=${trialParameters.learningRate}"
+                  - "--num-layers=${trialParameters.numberLayers}"
+                  - "--optimizer=${trialParameters.optimizer}"
             restartPolicy: Never
+
